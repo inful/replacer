@@ -72,14 +72,16 @@ changelog:
   use: git
   sort: asc
   filters:
+    # The scope in brackets is part of the prefix, so `chore(deps):` has to
+    # be matched by `chore\(` and not by `chore:`.
     exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
-      - '^ci:'
-      - '^build:'
-      - '^style:'
-      - '^refactor:'
+      - '^docs(\(|:)'
+      - '^test(\(|:)'
+      - '^chore(\(|:)'
+      - '^ci(\(|:)'
+      - '^build(\(|:)'
+      - '^style(\(|:)'
+      - '^refactor(\(|:)'
       - Merge pull request
       - Merge branch
   groups:
@@ -101,6 +103,7 @@ release:
     name: replacer
   draft: true
   prerelease: auto
+  name_template: "{{ .ProjectName }} v{{ .Version }}"
 
 # `brew install` and `apt` are deliberately NOT configured here. A formula
 # needs a tap to live in, and shipping the block before the tap exists
