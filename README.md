@@ -1,5 +1,10 @@
 # replacer
 
+[![CI](https://github.com/inful/replacer/actions/workflows/ci.yml/badge.svg)](https://github.com/inful/replacer/actions/workflows/ci.yml)
+[![Release](https://github.com/inful/replacer/actions/workflows/release.yml/badge.svg)](https://github.com/inful/replacer/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/inful/replacer)](https://goreportcard.com/report/github.com/inful/replacer)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
+
 Pull the machine-readable JSON out of a Nextflow execution report and
 timeline, and anonymize the sample ids in it.
 
@@ -20,6 +25,13 @@ inside the task script, where file names are built from the sample id.
 
 ```bash
 go install github.com/inful/replacer/cmd/replacer@latest
+```
+
+Or download a binary for your platform from the
+[releases page](https://github.com/inful/replacer/releases):
+
+```bash
+tar -xzf replacer_<version>_<os>_<arch>.tar.gz
 ```
 
 Or build from a checkout:
@@ -82,4 +94,12 @@ such as the task `workdir` keep their shape; they carry hashes, not names.
 ```bash
 go test -race -count=1 ./...
 golangci-lint run ./...
+goreleaser release --snapshot --clean --skip=publish
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the gates, the commit conventions
+and the release process.
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE).
