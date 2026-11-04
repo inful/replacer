@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # GoReleaser builds the changelog from git history, so it needs
           # the full history and the tags, not a shallow clone.
