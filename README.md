@@ -49,35 +49,36 @@ replacer extract pipeline_info/ -o json/
 # Write anonymized JSON: sample ids become sample001, sample002, ...
 replacer anonymize pipeline_info/ -o anon/
 
-# Same, but also rename the bare sample name a tag is built from
-# (TESTA_L002 also renames TESTA, which appears in file names).
-replacer anonymize pipeline_info/ -o anon/ --derive-prefix
-
-# Only rename ids matching a pattern, and rename an id the report does not
-# mention at all.
+# Only rename names matching a pattern, and rename a name the report does
+# not mention at all.
 replacer anonymize pipeline_info/ -o anon/ --sample-regex '^SAMP_' --extra PATIENT_07
 ```
 
-`anonymize` writes `sample_map.json` next to its output: the original id and
+`anonymize` writes `sample_map.json` next to its output: the original name and
 its pseudonym. Keep that file — pass it back with `--map` to reuse the same
 pseudonyms in another report, and to know what a pseudonym stands for.
 
 ### What gets renamed
 
-Sample ids are found in three places:
+The sample name is what the tool looks for, and the technical markers that
+follow it are not part of it: the sheet index (`S1`), the lane (`L001`) and
+the read (`R1`, `R2`). They describe the file, not the sample.
 
-| source | example |
-| --- | --- |
-| the `tag` of a traced task | `TESTA_L002` |
-| the id in a `PROCESS:ALIAS (TAG)` label, in the report and the timeline | `TRIM_READS:TRIM (TESTA_L002)` |
-| the bare name a tag is built from, with `--derive-prefix` | `TESTA` |
+| source | example | renamed as |
+| --- | --- | --- |
+| the `tag` of a traced task | `TESTA_L001` | `sample001_L001` |
+| the id in a `PROCESS:ALIAS (TAG)` label, in the report and the timeline | `TRIM_READS:TRIM (TESTA_L001)` | `TRIM_READS:TRIM (sample001_L001)` |
+| the name inside a file name in the task script | `TESTA_S1_L001_R1_001.fastq.gz` | `sample001_S1_L001_R1_001.fastq.gz` |
 
-Every occurrence of those ids is replaced, wherever it sits in the JSON.
+Every occurrence of the name is replaced, wherever it sits in the JSON. The
+lane and the read stay visible, and one sample keeps one pseudonym across
+its lanes: `TESTA_L001` and `TESTA_L002` are both `sample001`.
+
 The structure, the timings and the resource numbers are left as they are.
 
 ### What is not renamed
 
-The payload holds no samplesheet, so an id that only shows up inside a
+The payload holds no samplesheet, so a name that only shows up inside a
 derived file name is invisible to the tool — pass it with `--extra`. Paths
 such as the task `workdir` keep their shape; they carry hashes, not names.
 

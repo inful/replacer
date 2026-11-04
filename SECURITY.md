@@ -33,5 +33,5 @@ To share a report outside the team, anonymize it first and read the output
 before sending it:
 
 ```bash
-replacer anonymize pipeline_info/ -o anon/ --derive-prefix
+replacer anonymize pipeline_info/ -o anon/
 ```

@@ -46,6 +46,29 @@ var payloadMarkers = []string{
 // tagLabel matches Nextflow's "PROCESS:ALIAS (TAG)" task label.
 var tagLabel = regexp.MustCompile(`^(.*)\(([^()]+)\)\s*$`)
 
+// technicalToken matches the markers that follow the sample name in an
+// Illumina-style name: the sheet index (S1), the lane (L001) and the read
+// (R1, R2). They describe the file, not the sample.
+var technicalToken = regexp.MustCompile(`(?i)^[lrs]\d+$`)
+
+// SampleName returns the sample name inside an id, dropping the technical
+// markers that follow it. "TESTA_L001" is the sample "TESTA" on lane L001;
+// the lane is not part of the name. An id that starts with a marker has no
+// name to extract and is returned unchanged.
+func SampleName(id string) string {
+	parts := strings.Split(id, "_")
+	for i, part := range parts {
+		if !technicalToken.MatchString(part) {
+			continue
+		}
+		if i == 0 {
+			return id
+		}
+		return strings.Join(parts[:i], "_")
+	}
+	return id
+}
+
 // ExtractPayload reads path and returns the JSON payload embedded in it.
 func ExtractPayload(path string) (Payload, error) {
 	raw, err := os.ReadFile(path) //nolint:gosec // the path is the user's own input
@@ -108,13 +131,14 @@ func LoadPayload(path string) (Payload, error) {
 	return payload, nil
 }
 
-// Samples returns the sample ids detected in payloads: the tag of every
-// traced task plus the id in a "PROCESS:ALIAS (TAG)" label. The result is
-// sorted and free of duplicates.
+// Samples returns the sample names detected in payloads: the name inside the
+// tag of every traced task plus the name inside a "PROCESS:ALIAS (TAG)"
+// label. The technical markers are dropped, so the two lanes of one sample
+// give one name. The result is sorted and free of duplicates.
 func Samples(payloads []Payload) []string {
 	found := map[string]bool{}
 	add := func(candidate string) {
-		candidate = strings.TrimSpace(candidate)
+		candidate = SampleName(strings.TrimSpace(candidate))
 		if !nameLike(candidate) {
 			return
 		}
@@ -178,24 +202,6 @@ func walk(node any, key string, fn func(key string, value any)) {
 			walk(v, key, fn)
 		}
 	}
-}
-
-// DerivePrefixes returns the part before the first underscore of every id.
-// A tag such as "TESTA_L002" carries the bare sample name "TESTA", which is
-// what file names in the task script are built from.
-func DerivePrefixes(ids []string) []string {
-	seen := make(map[string]bool, len(ids))
-	prefixes := make([]string, 0, len(ids))
-	for _, id := range ids {
-		prefix, _, ok := strings.Cut(id, "_")
-		if !ok || prefix == "" || prefix == id || seen[prefix] {
-			continue
-		}
-		seen[prefix] = true
-		prefixes = append(prefixes, prefix)
-	}
-	sort.Strings(prefixes)
-	return prefixes
 }
 
 // Mapping maps every sample id to a pseudonym such as "sample001". Ids

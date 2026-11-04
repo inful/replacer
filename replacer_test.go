@@ -9,7 +9,10 @@ import (
 	"github.com/inful/replacer"
 )
 
-const sampleID = "SAMP_A"
+const (
+	sampleID = "SAMP_A"
+	laneName = "TESTA"
+)
 
 const reportHTML = `<html><body><script>
   window.data = { "trace":[
@@ -20,6 +23,16 @@ const reportHTML = `<html><body><script>
 
 const timelineHTML = `<html><body><script>
   window.data = { "elapsed":"1s","processes":[{"label":"TRIM:TRIM (SAMP_A)"}] };
+</script></body></html>`
+
+// laneHTML is a report whose sample sits on two lanes: the lane and the
+// read markers are not part of the sample name.
+const laneHTML = `<html><body><script>
+  window.data = { "trace":[
+    {"task_id":"1","tag":"TESTA_L001","name":"TRIM:TRIM (TESTA_L001)","status":"OK",
+     "script":"tool TESTA_S1_L001_R1_001.fastq.gz"},
+    {"task_id":"2","tag":"TESTA_L002","name":"TRIM:TRIM (TESTA_L002)","status":"OK"}
+  ],"summary":[] };
 </script></body></html>`
 
 func writeFile(t *testing.T, dir, name, content string) string {
@@ -127,10 +140,56 @@ func TestAnonymizeReplacesEverywhere(t *testing.T) {
 	}
 }
 
-func TestDerivePrefixes(t *testing.T) {
-	prefixes := replacer.DerivePrefixes([]string{"TESTA_L002", "TESTA_L001", "SRR123"})
-	if len(prefixes) != 1 || prefixes[0] != "TESTA" {
-		t.Errorf("prefixes = %v, want [TESTA]", prefixes)
+func TestSampleName(t *testing.T) {
+	cases := map[string]string{
+		"TESTA_L001":           laneName,
+		"TESTA_S1_L001_R2_001": laneName,
+		"TESTA":                "TESTA",
+		"SAMP_A":               "SAMP_A",
+		"NA12878":              "NA12878",
+		"PATIENT_007":          "PATIENT_007",
+		// An id that starts with a marker has no name to extract.
+		"L001_only": "L001_only",
+	}
+	for id, want := range cases {
+		if got := replacer.SampleName(id); got != want {
+			t.Errorf("SampleName(%q) = %q, want %q", id, got, want)
+		}
+	}
+}
+
+func TestSamplesGivesOneNamePerSample(t *testing.T) {
+	dir := t.TempDir()
+	payload, err := replacer.ExtractPayload(writeFile(t, dir, "execution_report.html", laneHTML))
+	if err != nil {
+		t.Fatalf("ExtractPayload: %v", err)
+	}
+
+	samples := replacer.Samples([]replacer.Payload{payload})
+	if len(samples) != 1 || samples[0] != laneName {
+		t.Errorf("samples = %v, want [%s]", samples, laneName)
+	}
+}
+
+func TestAnonymizeKeepsTheLane(t *testing.T) {
+	dir := t.TempDir()
+	payload, err := replacer.ExtractPayload(writeFile(t, dir, "execution_report.html", laneHTML))
+	if err != nil {
+		t.Fatalf("ExtractPayload: %v", err)
+	}
+	mapping := replacer.Mapping(replacer.Samples([]replacer.Payload{payload}), nil, "sample")
+
+	anonymized := replacer.Anonymize(payload, mapping)
+	trace, _ := anonymized["trace"].([]any)
+	entry, _ := trace[0].(map[string]any)
+	if entry["tag"] != "sample001_L001" {
+		t.Errorf("tag = %v, want sample001_L001", entry["tag"])
+	}
+	if entry["name"] != "TRIM:TRIM (sample001_L001)" {
+		t.Errorf("name = %v", entry["name"])
+	}
+	if entry["script"] != "tool sample001_S1_L001_R1_001.fastq.gz" {
+		t.Errorf("script = %v", entry["script"])
 	}
 }
 

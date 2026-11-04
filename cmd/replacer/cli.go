@@ -45,13 +45,12 @@ type cmdExtract struct {
 }
 
 type cmdAnonymize struct {
-	Inputs      []string `arg:""                                                                                                          help:"Report or timeline HTML or JSON files, or directories holding them." name:"inputs" optional:"" type:"path"`
-	Output      string   `help:"Output directory (default: next to each input)."                                                          short:"o"                                                                  type:"path"`
-	Map         string   `help:"Sample map file: read when it exists, written with the full mapping."                                     type:"path"`
-	SampleRegex string   `help:"Only rename sample ids matching this regex."                                                              name:"sample-regex"`
-	Derive      bool     `help:"Also rename the part before the first underscore of every sample id, e.g. TESTA_L002 also renames TESTA." name:"derive-prefix"`
-	Extra       []string `help:"Additional sample id to rename (repeatable)."`
-	Prefix      string   `default:"sample"                                                                                                help:"Pseudonym prefix."`
+	Inputs      []string `arg:""                                                                      help:"Report or timeline HTML or JSON files, or directories holding them." name:"inputs" optional:"" type:"path"`
+	Output      string   `help:"Output directory (default: next to each input)."                      short:"o"                                                                  type:"path"`
+	Map         string   `help:"Sample map file: read when it exists, written with the full mapping." type:"path"`
+	SampleRegex string   `help:"Only rename sample names matching this regex."                        name:"sample-regex"`
+	Extra       []string `help:"Additional sample name to rename (repeatable)."`
+	Prefix      string   `default:"sample"                                                            help:"Pseudonym prefix."`
 }
 
 type cmdVersion struct{}
@@ -199,7 +198,7 @@ func runAnonymize(cmd cmdAnonymize, stdout, stderr io.Writer) int {
 		return exitError
 	}
 	printf(stdout, "sample map -> %s\n", mapPath)
-	printf(stdout, "%d sample id(s) renamed\n", len(mapping))
+	printf(stdout, "%d sample name(s) renamed\n", len(mapping))
 	return exitOK
 }
 
@@ -232,9 +231,9 @@ func writeAnonymized(cmd cmdAnonymize, files []string, payloads []replacer.Paylo
 	return nil
 }
 
-// selectSamples returns the sample ids to rename: the ids found in the
-// payloads, filtered by --sample-regex, plus the ids named on the command
-// line and, with --derive-prefix, the bare sample name a tag is built from.
+// selectSamples returns the sample names to rename: the names found in the
+// payloads, filtered by --sample-regex, plus the names named on the command
+// line.
 func selectSamples(cmd cmdAnonymize, payloads []replacer.Payload) ([]string, error) {
 	samples := replacer.Samples(payloads)
 	if cmd.SampleRegex != "" {
@@ -250,9 +249,8 @@ func selectSamples(cmd cmdAnonymize, payloads []replacer.Payload) ([]string, err
 		}
 		samples = kept
 	}
-	samples = append(samples, cmd.Extra...)
-	if cmd.Derive {
-		samples = append(samples, replacer.DerivePrefixes(samples)...)
+	for _, extra := range cmd.Extra {
+		samples = append(samples, replacer.SampleName(extra))
 	}
 	return samples, nil
 }

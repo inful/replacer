@@ -59,8 +59,8 @@ release builds.
 Commit messages follow Conventional Commits:
 
 ```
-feat(cli): add a --derive-prefix flag
-fix: keep the longest sample id when replacing
+feat(cli): add a --sample-regex flag
+fix: keep the longest sample name when replacing
 docs: explain the sample map
 ```
 
