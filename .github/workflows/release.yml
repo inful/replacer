@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# Tag-triggered release. Pushing a v* tag runs GoReleaser, which builds the
+# `replacer` CLI for the six platforms ci.yml already cross-compiles, writes
+# the checksums and opens a DRAFT GitHub release. Draft so the notes get
+# read before they ship.
+#
+# The tag is not pushed on every merge on purpose: a release is a decision.
+# The version follows the conventional commits since the last tag —
+# feat -> minor, fix -> patch, feat! or a BREAKING CHANGE footer -> major.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+# Never let two releases race on the same tag.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  goreleaser:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          # GoReleaser builds the changelog from git history, so it needs
+          # the full history and the tags, not a shallow clone.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

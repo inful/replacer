@@ -1,0 +1,107 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# goreleaser configuration for github.com/inful/replacer.
+#
+# The repo ships both a library (the root package) and the `replacer` CLI,
+# so this produces binaries for every platform ci.yml cross-compiles — the
+# same six GOOS/GOARCH pairs, so a release can never ship a platform the
+# matrix missed.
+#
+# Draft by default so the maintainer can read the notes before publishing.
+# Docs: https://goreleaser.com/customization/
+version: 2
+
+project_name: replacer
+
+before:
+  hooks:
+    # Same suite CI runs, so a regression is caught at tag time rather than
+    # by a user downloading the artefact.
+    - go mod tidy
+    - go test -race -count=1 ./...
+
+builds:
+  - id: replacer
+    main: ./cmd/replacer
+    binary: replacer
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      # cli.go declares `var version = "dev"` and overrides it here.
+      - -s -w -X main.version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: replacer
+    ids:
+      - replacer
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # LICENSE and README travel with every artefact: this is GPL-3.0, and
+    # the licence text must accompany the binary.
+    files:
+      - LICENSE
+      - README.md
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}aarch64
+      {{- else }}{{ .Arch }}{{ end }}
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - '^build:'
+      - '^style:'
+      - '^refactor:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^fix'
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: '^perf'
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: inful
+    name: replacer
+  draft: true
+  prerelease: auto
+
+# `brew install` and `apt` are deliberately NOT configured here. A formula
+# needs a tap to live in, and shipping the block before the tap exists
+# would fail the release against a repository that may not.

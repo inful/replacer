@@ -1,0 +1,120 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+#
+# The same gates the local lefthook pre-commit runs (golangci-lint, go vet,
+# go test -race) on every push to main and every PR, plus the cross-compile
+# matrix the release workflow builds from.
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # goreleaser ships windows binaries, so the suite has to build and
+        # run there. The race detector needs a C toolchain setup-go does not
+        # install, so it runs on linux only.
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            race: '-race'
+          - os: windows-latest
+            race: ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test -v ${{ matrix.race }} -count=1 -cover ./...
+
+      - name: Build
+        run: go build -v ./cmd/replacer
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check go.mod is tidy
+        run: |
+          go mod tidy
+          if ! git diff --exit-code -- go.mod go.sum; then
+            echo "go.mod or go.sum is out of date; run 'go mod tidy' locally and commit."
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        # v9 is required for golangci-lint v2.x configs (v8 only supports v1.x
+        # formats). Bump in step with the local tool version.
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14
+
+      - name: Check goreleaser config
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: check
+
+  build-matrix:
+    # Compile on every platform goreleaser builds, so platform-specific
+    # breakage surfaces before a release, not during.
+    name: Build ${{ matrix.os }}/${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build ${{ matrix.os }}/${{ matrix.arch }}
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -trimpath -ldflags="-s -w" \
+            -o dist/replacer-${{ matrix.os }}-${{ matrix.arch }} ./cmd/replacer
