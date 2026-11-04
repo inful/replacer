@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strings"
@@ -90,7 +91,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "anonymize":
 		return runAnonymize(c.Anonymize, stdout, stderr)
 	case "version":
-		printf(stdout, "replacer %s\n", version)
+		printf(stdout, "replacer %s\n", buildVersion())
 		return exitOK
 	default:
 		printf(stderr, "replacer: unknown command %q\n", ctx.Command())
@@ -103,6 +104,23 @@ func run(args []string, stdout, stderr io.Writer) int {
 // itself has failed.
 func printf(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+// buildVersion returns the version of the running binary: the one GoReleaser
+// injects, or the module version recorded in the build info when the binary
+// was installed with "go install" — that build path carries no ldflags.
+func buildVersion() string {
+	if version != "dev" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return version
+	}
+	if info.Main.Version == "" || info.Main.Version == "(devel)" {
+		return version
+	}
+	return strings.TrimPrefix(info.Main.Version, "v")
 }
 
 // runExtract writes the JSON payload of every input file next to it.

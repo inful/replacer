@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -130,6 +131,16 @@ func TestRunAnonymizeReusesMap(t *testing.T) {
 	mapping := readJSON(t, mapPath)
 	if mapping["SAMP_A"] != "sample042" {
 		t.Errorf("mapping = %v, want SAMP_A -> sample042", mapping)
+	}
+}
+
+func TestRunVersion(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"version"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit = %d, stderr = %s", code, stderr.String())
+	}
+	if !strings.HasPrefix(stdout.String(), "replacer ") {
+		t.Errorf("stdout = %q, want a version line", stdout.String())
 	}
 }
 
