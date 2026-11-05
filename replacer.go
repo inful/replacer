@@ -43,8 +43,8 @@ var payloadMarkers = []string{
 	"let data =",
 }
 
-// tagLabel matches Nextflow's "PROCESS:ALIAS (TAG)" task label.
-var tagLabel = regexp.MustCompile(`^(.*)\(([^()]+)\)\s*$`)
+// parenthesised finds the "(SAMPLE)" group of a task label.
+var parenthesised = regexp.MustCompile(`\(([^()]+)\)`)
 
 // technicalToken matches the markers that follow the sample name in an
 // Illumina-style name: the sheet index (S1), the lane (L001) and the read
@@ -131,15 +131,22 @@ func LoadPayload(path string) (Payload, error) {
 	return payload, nil
 }
 
-// Samples returns the sample names detected in payloads: the name inside the
-// tag of every traced task plus the name inside a "PROCESS:ALIAS (TAG)"
-// label. The technical markers are dropped, so the two lanes of one sample
-// give one name. The result is sorted and free of duplicates.
+// Samples returns the sample names detected in payloads: the tag of every
+// traced task plus the name inside a "PROCESS:ALIAS (SAMPLE)" label. The
+// technical markers are dropped, so the two lanes of one sample give one
+// name. The result is sorted and free of duplicates.
 func Samples(payloads []Payload) []string {
 	found := map[string]bool{}
-	add := func(candidate string) {
+	// add takes a candidate and whether it has to look like a name. A tag is
+	// Nextflow's own sample identifier and is taken as it is; a name read
+	// out of a label has to pass the name test, or every count in the
+	// report would become a sample.
+	add := func(candidate string, strict bool) {
 		candidate = SampleName(strings.TrimSpace(candidate))
-		if !nameLike(candidate) {
+		if candidate == "" || candidate == "-" {
+			return
+		}
+		if strict && !nameLike(candidate) {
 			return
 		}
 		found[candidate] = true
@@ -149,31 +156,58 @@ func Samples(payloads []Payload) []string {
 		for _, entry := range trace {
 			task, _ := entry.(map[string]any)
 			if tag, ok := task["tag"].(string); ok {
-				add(tag)
+				add(tag, false)
 			}
 		}
-		walk(payload, "", func(key string, value any) {
-			if key != "name" && key != "label" {
-				return
-			}
-			label, ok := value.(string)
-			if !ok {
-				return
-			}
-			if match := tagLabel.FindStringSubmatch(strings.TrimSpace(label)); match != nil {
-				add(match[2])
-			}
-		})
+		addLabelNames(payload, add)
 	}
-	samples := make([]string, 0, len(found))
-	for sample := range found {
-		samples = append(samples, sample)
-	}
-	sort.Strings(samples)
-	return samples
+	return sortedNames(found)
 }
 
-// nameLike reports whether s looks like a name rather than a bare number.
+// addLabelNames adds the sample names carried by the label fields of the
+// payload.
+func addLabelNames(payload Payload, add func(candidate string, strict bool)) {
+	walk(payload, "", func(key string, value any) {
+		if !isLabelField(key) {
+			return
+		}
+		label, ok := value.(string)
+		if !ok {
+			return
+		}
+		matches := parenthesised.FindAllStringSubmatch(label, -1)
+		if len(matches) == 0 {
+			return
+		}
+		add(matches[len(matches)-1][1], true)
+	})
+}
+
+// sortedNames returns the names of the set, sorted.
+func sortedNames(found map[string]bool) []string {
+	names := make([]string, 0, len(found))
+	for name := range found {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// isLabelField reports whether a key carries a "PROCESS:ALIAS (SAMPLE)"
+// label. The report labels a task in several places: the task name, the
+// timeline label and the per-process summary labels (minLabel, maxLabel,
+// q1Label and so on).
+func isLabelField(key string) bool {
+	return key == "name" || key == "label" || strings.HasSuffix(key, "Label")
+}
+
+// minNumericNameLength is the shortest run of digits accepted as a name. An
+// accession like "12345678" is a name; a count like "512" is not.
+const minNumericNameLength = 6
+
+// nameLike reports whether s looks like a name rather than a bare number. A
+// name carries a letter ("N1234567", "TESTA") or is an accession: digits
+// and nothing else, at least minNumericNameLength of them.
 func nameLike(s string) bool {
 	if s == "" || s == "-" {
 		return false
@@ -185,7 +219,10 @@ func nameLike(s string) bool {
 			break
 		}
 	}
-	return !digits
+	if digits {
+		return len(s) >= minNumericNameLength
+	}
+	return true
 }
 
 // walk calls fn for every value in the payload, with the key it was stored

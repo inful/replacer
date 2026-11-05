@@ -67,20 +67,26 @@ the read (`R1`, `R2`). They describe the file, not the sample.
 | source | example | renamed as |
 | --- | --- | --- |
 | the `tag` of a traced task | `TESTA_L001` | `sample001_L001` |
-| the id in a `PROCESS:ALIAS (TAG)` label, in the report and the timeline | `TRIM_READS:TRIM (TESTA_L001)` | `TRIM_READS:TRIM (sample001_L001)` |
+| the id in a task label, in the report and the timeline | `TRIM_READS:TRIM (TESTA_L001)` | `TRIM_READS:TRIM (sample001_L001)` |
+| the id in a per-process summary label | `minLabel`: `TRIM_READS:TRIM (TESTA_L001)` | `minLabel`: `TRIM_READS:TRIM (sample001_L001)` |
 | the name inside a file name in the task script | `TESTA_S1_L001_R1_001.fastq.gz` | `sample001_S1_L001_R1_001.fastq.gz` |
 
 Every occurrence of the name is replaced, wherever it sits in the JSON. The
 lane and the read stay visible, and one sample keeps one pseudonym across
 its lanes: `TESTA_L001` and `TESTA_L002` are both `sample001`.
 
+A name that is only digits is a name too — an accession like `12345678` or
+`N1234567` is renamed like any other. A run of fewer than six digits is
+read as a count, not as a name.
+
 The structure, the timings and the resource numbers are left as they are.
 
 ### What is not renamed
 
 The payload holds no samplesheet, so a name that only shows up inside a
-derived file name is invisible to the tool — pass it with `--extra`. Paths
-such as the task `workdir` keep their shape; they carry hashes, not names.
+field the report does not label — a file name in the task script and
+nothing else — is invisible to the tool: pass it with `--extra`. Paths such
+as the task `workdir` keep their shape; they carry hashes, not names.
 
 ## Exit codes
 
